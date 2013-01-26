@@ -36,6 +36,7 @@ dnl -----------------------------------------------------------------
 
 
 
+PKG_CHECK_MODULES([libcrypto], [libcrypto])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
