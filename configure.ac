@@ -1,5 +1,5 @@
 dnl Run autoreconf --install to generate ./configure from this file
-AC_INIT([agan8021xclient], [1.0], [AGanNo2@163.com], [], [])
+AC_INIT([agan8021xclient], [1.1], [agan8021xclient-helpme@lists.sourceforge.net], [], [http://sourceforge.net/projects/agan8021xclient/])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_PROG_CC
 
