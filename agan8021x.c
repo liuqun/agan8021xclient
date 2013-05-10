@@ -19,8 +19,8 @@
 
 typedef struct UserData
 {
-    char username[20];
-    char password[20];
+//  char username[20];/* FIXME: .username will be DEPRECATED! DO NOT use stUserData.username any more!! */
+//  char password[20];/* FIXME: .password will be DEPRECATED! DO NOT use stUserData.password any more!! */
     unsigned char Ip[4];
     unsigned char Mac[6];
     char nic[60];
@@ -29,7 +29,9 @@ typedef struct UserData
 //全局数据stUserData
 USERDATA stUserData;
 
+#if 0  /* FIXME: the following line will be DEPRECATIED*/
 char strIP[16];             //IP地址
+#endif /* FIXME */
 bool online = false;        // 是否在线的标记
 bool FirstPacket = true;    // 用于标记第一个包是否已经发送
 
@@ -39,7 +41,9 @@ char Passwd[64] = {0};      // 存放用户的密码
 u_int PasswdLen = 0;        // 密码字符串长度(不是存储长度)
 
 pcap_t *fp = NULL;			// 网卡设备
+#if 0  /* FIXME: the following line will be DEPRECATIED*/
 FILE *file;
+#endif /* FIXME */
 
 // 判断这种包的类型的标志 
 u_char PType[4] = {0x88, 0x8e, 0x01, 0x00}; 
@@ -203,6 +207,7 @@ unsigned long _rand(unsigned long t)
 }
 
 
+void GetIpFromDevice(uint8_t IPv4Addr[4], const char DeviceName[]);
 void GetIPAddr();
 void GetMacAddr();
 
@@ -227,39 +232,88 @@ bool Disconnect();    // 发送断开连接的包
 //数据包处理函数声明 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data); 
 
-//BOOL WINAPI ConsoleHandler(DWORD CEvent);
-void config();
-void readconfig();
-void writeconfig();
-void supplicant();
+/**
+ * @func: Authentication()
+ * @para:
+ *
+ */
+int Authentication(const char *Username, const char *Password, const char *DeviceName)
+{
+    const size_t PASSWORD_MAX = sizeof(Passwd)-1;
+    const size_t NIC_NAME_MAX = sizeof(stUserData.nic)-1;
+    size_t len;
 
-
-int main(int argc, char* argv[]) 
-{ 
-    printf("      This version is compitible with H3C's 802.1x Clent V2.20-0247\n");
-    printf("      Coded by AGanNo2\n");
-    printf("      Support site:http://AGanNo2.ys168.com\n");
-    printf("      Email: AGanNo2@163.com\n");
-    printf("      Thanks for thorqq!\n");
-    printf("      To run it, you must be the root or you can change the privilege by command chmod or chown!\n");
-    if(!(file=fopen("h3com802.1x.conf","r")))
+    /* 用户名 */
+    if (!Username || strlen(Username)==0)
     {
-        config();
+        fprintf(stderr, "ERROR: Unexpected empty username\n");
+        exit(255);
+    }
+    len = strlen(Username);
+    inline size_t MIN(size_t a, size_t b) {return a<=b? a:b;}
+    memcpy(SessionBuf + 0x1e,      Username, MIN(len,sizeof(SessionBuf)-0x1e));     /* WARNING: SessionBuf[60]空间不一定够用 */
+    memcpy(SendUsernameBuf + 0x1d, Username, MIN(len,sizeof(SendUsernameBuf)-0x1d));/* WARNING: SendUsernameBuf[60]空间不一定够用 */
+    memcpy(PasswordBuf + 0x28,     Username, MIN(len,sizeof(PasswordBuf)-0x28));    /* WARNING: 用户名很长时PasswordBuf[60]空间不一定够用 */
+    if (0x28+len > sizeof(PasswordBuf))                                             /* 检查用户名是否超过PasswordBuf的限制 */
+    {
+        fprintf(stderr, "WARNING: username too long!\n");
+    }
+    SessionBuf     [0x11] = len+0x0b;
+    SessionBuf     [0x15] = len+0x0b;
+    SendUsernameBuf[0x11] = len+0x0b;
+    SendUsernameBuf[0x15] = len+0x0b;
+    PasswordBuf    [0x11] = len+0x16;
+    PasswordBuf    [0x15] = len+0x16;
+
+    /* 密码 */
+    if (!Password)
+    {
+        len = 0;
+    } else
+    {
+        len = strlen(Password);
+    }
+    if (len > PASSWORD_MAX) /* WARNING: 由于长度限制,超出最大长度的字符将被截断 */
+    {
+        fprintf(stderr, "WARNING: password too long, will be trimmed\n");
+        len = PASSWORD_MAX;
+    }
+    memcpy(Passwd, Password, len);
+    Passwd[len] = '\0';
+    PasswdLen = len;
+
+    /* 网卡 */
+    if (!DeviceName || strlen(DeviceName)==0)
+    { /* FIXME: 遇到网卡名称不存在的情况应该该报错并结束程序, 但此处我还是提供了一个默认值 */
+        const char DEFAULT_NIC_NAME[]="eth0";
+        len = strlen(DEFAULT_NIC_NAME);
+        memcpy(stUserData.nic, DEFAULT_NIC_NAME, len);
     }
     else
     {
-        readconfig();
+        len = strlen(DeviceName);
+        if (len > NIC_NAME_MAX) /* WARNING: 由于长度限制,超出最大长度的字符将被截断 */
+        {
+            len = NIC_NAME_MAX;
+        }
+        memcpy(stUserData.nic, DeviceName, len);
     }
+    stUserData.nic[len] = '\0';
+    GetMacAddr();
+    SetMacAddress(stUserData.Mac);
+    GetIPAddr();
+    SetIpAddress(stUserData.Ip);
 
-    supplicant();
+    if(!(OpenOneX(stUserData.nic)))	//打开网卡
+    {
+        printf("can't open net card!\n");
+        exit(1);
+    }
+    Connect();	//发送请求连接包
+    OneXLoop();		//启动包处理循环
+}
 
-    //开始捕捉
-    //pcap_loop(adhandle, 0, packet_handler, NULL); 	
-    //发送离线数据包
-    //pcap_sendpacket(adhandle,DisconnectBuf,60);	
-    return 0; 
-} 
-
+#if 0  /* FIXME: the following lines will be DEPRECATIED*/
 void config()
 {
     printf("The config file h3com802.1x.conf doesn't exist,this may be the first you use it，Let's begin to config!\n");
@@ -352,23 +406,26 @@ void writeconfig()
     fputs("\n",file);
     fclose(file);
 }
+#endif /* FIXME */
 
-void supplicant()
-{
-    //把认证信息写入 包
-    SetMacAddress(stUserData.Mac);
-    SetIpAddress(stUserData.Ip);
-    SetUsername(stUserData.username);
-    SetPassword(stUserData.password);
-
-    if(!(OpenOneX(stUserData.nic)))	//打开网卡
-    {
-        printf("can't open net card!\n");
-        exit(1);
-    }
-    Connect();	//发送请求连接包
-    OneXLoop();		//启动包处理循环
-}
+#if 0  /* FIXME: the following lines will be DEPRECATIED*/
+//void supplicant()
+//{
+//    //把认证信息写入 包
+//    SetMacAddress(stUserData.Mac);
+//    SetIpAddress(stUserData.Ip);
+//    SetUsername(stUserData.username);
+//    SetPassword(stUserData.password);
+//
+//    if(!(OpenOneX(stUserData.nic)))	//打开网卡
+//    {
+//        printf("can't open net card!\n");
+//        exit(1);
+//    }
+//    Connect();	//发送请求连接包
+//    OneXLoop();		//启动包处理循环
+//}
+#endif /* FIXME */
 
 //与windows兼容的GetTickCount函数
 long GetTickCount()
@@ -478,7 +535,6 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
             { 
                 online = true; 
             } 
-            writeconfig();
             return; 
         } 
 
@@ -493,16 +549,13 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
                     online = false; 
                     printf("Logging off successful!\n");
                 } 
+                exit(0); /* PROGRAM EXIT POINT */
             }
             else// 其他离线包,包含错误的原因
             {
                 printf("%s\n",(pkt_data+0x18));
-                config();
-                supplicant();
             }
-            system("pause");
-            exit(1);
-            return;
+            exit(1); /* PROGRAM EXIT POINT */
         }
 
 
@@ -531,78 +584,82 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
 void GetIPAddr()
 {
-    pcap_if_t *alldevs; 
-    pcap_if_t *d; 
-    int inum; 
-    int i=0; 
-    pcap_t *adhandle; 
-    char errbuf[PCAP_ERRBUF_SIZE]; 
-    pcap_addr_t *a;
-    unsigned long uIP;
-    //获取设备列表 
-    if (pcap_findalldevs(&alldevs, errbuf) == -1) 
-    { 
-        fprintf(stderr,"Error in pcap_findalldevs: %s\n", errbuf); 
-        exit(1); 
-    } 
-
-    //数据列表
-    for(d=alldevs; d; d=d->next) 
-    { 
-        //printf("%d. %s", ++i, d->name);
-        printf("%d.",++i);
-        if (d->name) 
-            printf(" (%s)\n", d->name); 
-        else 
-            printf(" (No name available)\n");
-
-    } 
-
-    if(i==0) 
-    { 
-        printf("\nNo interfaces found! Make sure WinPcap is installed.\n"); 
-        exit(1); 
-    } 
-
-    printf("\nPlease choose net card (1-%d):",i); 
-    scanf("%d", &inum); 
-
-    if(inum < 1 || inum > i) 
-    { 
-        printf("\nInterface number out of range.\n"); 
-        //释放设备列表 
-        pcap_freealldevs(alldevs); 
-        exit(1); 
-    } 
-
-    //转到选择的设备 
-    for(d=alldevs, i=0; i< inum-1;d=d->next, i++); 
-
-    //memcpy(stUserData.nic,d->name,strlen(d->name));
-    //printf("%s\n",stUserData.nic);
-
-
-    for(a=d->addresses;a;a=a->next)
-    {
-        if(a->addr && (a->addr->sa_family == AF_INET) )
-        {
-            uIP = ((struct sockaddr_in *)a->addr)->sin_addr.s_addr;
-            memcpy( stUserData.Ip,(unsigned char *)&uIP,4);
-            memcpy( stUserData.nic,d->name,strlen(d->name)+1);
-            break;
-        }
-    }
-
-    //取得IP地址
-    //a=d->addresses;
-    //nsigned long ulIP=((struct sockaddr_in *)a->addr)->sin_addr.s_addr;
-    //memcpy(stUserData.Ip,&ulIP,4);
-    printf("%s\n",stUserData.nic);
-    sprintf(strIP,"%d.%d.%d.%d",stUserData.Ip[0],stUserData.Ip[1],stUserData.Ip[2],stUserData.Ip[3]);
-    //printf("\nlistening on %s...\n", d->description);
-    printf("%s\n",strIP);
-    //我们已经不需要设备列表了, 释放它
-    pcap_freealldevs(alldevs);
+#if 0  /* FIXME: the following lines will be DEPRECATIED*/
+//    pcap_if_t *alldevs;
+//    pcap_if_t *d;
+//    int inum;
+//    int i=0;
+//    pcap_t *adhandle;
+//    char errbuf[PCAP_ERRBUF_SIZE];
+//    pcap_addr_t *a;
+//    unsigned long uIP;
+//    //获取设备列表
+//    if (pcap_findalldevs(&alldevs, errbuf) == -1)
+//    {
+//        fprintf(stderr,"Error in pcap_findalldevs: %s\n", errbuf);
+//        exit(1);
+//    }
+//
+//    //数据列表
+//    for(d=alldevs; d; d=d->next)
+//    {
+//        //printf("%d. %s", ++i, d->name);
+//        printf("%d.",++i);
+//        if (d->name)
+//            printf(" (%s)\n", d->name);
+//        else
+//            printf(" (No name available)\n");
+//
+//    }
+//
+//    if(i==0)
+//    {
+//        printf("\nNo interfaces found! Make sure WinPcap is installed.\n");
+//        exit(1);
+//    }
+//
+//    printf("\nPlease choose net card (1-%d):",i);
+//    scanf("%d", &inum);
+//
+//    if(inum < 1 || inum > i)
+//    {
+//        printf("\nInterface number out of range.\n");
+//        //释放设备列表
+//        pcap_freealldevs(alldevs);
+//        exit(1);
+//    }
+//
+//    //转到选择的设备
+//    for(d=alldevs, i=0; i< inum-1;d=d->next, i++);
+//
+//    //memcpy(stUserData.nic,d->name,strlen(d->name));
+//    //printf("%s\n",stUserData.nic);
+//
+//
+//    for(a=d->addresses;a;a=a->next)
+//    {
+//        if(a->addr && (a->addr->sa_family == AF_INET) )
+//        {
+//            uIP = ((struct sockaddr_in *)a->addr)->sin_addr.s_addr;
+//            memcpy( stUserData.Ip,(unsigned char *)&uIP,4);
+//            memcpy( stUserData.nic,d->name,strlen(d->name)+1);
+//            break;
+//        }
+//    }
+//
+//    //取得IP地址
+//    //a=d->addresses;
+//    //nsigned long ulIP=((struct sockaddr_in *)a->addr)->sin_addr.s_addr;
+//    //memcpy(stUserData.Ip,&ulIP,4);
+//    printf("%s\n",stUserData.nic);
+//    sprintf(strIP,"%d.%d.%d.%d",stUserData.Ip[0],stUserData.Ip[1],stUserData.Ip[2],stUserData.Ip[3]);
+//    //printf("\nlistening on %s...\n", d->description);
+//    printf("%s\n",strIP);
+//    //我们已经不需要设备列表了, 释放它
+//    pcap_freealldevs(alldevs);
+#else  /* FIXME */
+    GetIpFromDevice(stUserData.Ip, stUserData.nic);
+#endif /* FIXME */
 }
 
 void GetMacAddr()
@@ -695,33 +752,34 @@ bool SetIpAddress(const u_char *IpAddress)
     return true; 
 } 
 
-bool SetUsername(const char *Username) 
-{ 
-    if (SessionBuf == NULL) 
-        return false; 
-
-    memcpy(SessionBuf + 0x1e, Username, strlen(Username)); 
-    memcpy(SendUsernameBuf + 0x1d, Username, strlen(Username)); 
-    memcpy(PasswordBuf + 0x28, Username, strlen(Username));
-
-    //设置长度值
-    SessionBuf[0x11] = strlen(Username) + 0x0b; 
-    SendUsernameBuf[0x11] = strlen(Username) + 0x0b; 
-    PasswordBuf[0x11] = strlen(Username) + 0x16;
-
-    SessionBuf[0x15] = strlen(Username) + 0x0b; 
-    SendUsernameBuf[0x15] = strlen(Username) + 0x0b; 
-    PasswordBuf[0x15] = strlen(Username) + 0x16;
-
-    return true; 
-} 
-
-void SetPassword(const char *Password)        // 设置密码 
-{ 
-    strcpy(Passwd, Password); 
-    PasswdLen = strlen(Passwd); 
-} 
-
+#if 0  /* DEPRECATED */
+//bool SetUsername(const char *Username)
+//{
+//    if (SessionBuf == NULL)
+//        return false;
+//
+//    memcpy(SessionBuf + 0x1e, Username, strlen(Username));
+//    memcpy(SendUsernameBuf + 0x1d, Username, strlen(Username));
+//    memcpy(PasswordBuf + 0x28, Username, strlen(Username));
+//
+//    //设置长度值
+//    SessionBuf[0x11] = strlen(Username) + 0x0b;
+//    SendUsernameBuf[0x11] = strlen(Username) + 0x0b;
+//    PasswordBuf[0x11] = strlen(Username) + 0x16;
+//
+//    SessionBuf[0x15] = strlen(Username) + 0x0b;
+//    SendUsernameBuf[0x15] = strlen(Username) + 0x0b;
+//    PasswordBuf[0x15] = strlen(Username) + 0x16;
+//
+//    return true;
+//}
+//
+//void SetPassword(const char *Password)        // 设置密码
+//{
+//    strcpy(Passwd, Password);
+//    PasswdLen = strlen(Passwd);
+//}
+#endif /* DEPRECATED */
 
 bool Connect()        // 发送请求连接的包 
 { 
