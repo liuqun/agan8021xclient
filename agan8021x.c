@@ -680,6 +680,9 @@ void GetMacAddr()
     }
     memcpy(stUserData.Mac,l_ether_addr,sizeof(stUserData.Mac));
 
+    fprintf(stderr, "%s: MAC=%02X:%02X:%02X:%02X:%02X:%02X\n", stUserData.nic,
+            stUserData.Mac[0], stUserData.Mac[1], stUserData.Mac[2],
+            stUserData.Mac[3], stUserData.Mac[4], stUserData.Mac[5]);
 }
 
 void ChangeDestMac(const u_char *MAC)    // 更改各种包的Destination MAC 
